@@ -1,0 +1,565 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ChronoKit API",
+    "version": "1.0.0",
+    "description": "DST-correct recurrence (RRULE), cron, and business-day computation as stateless HTTP. No accounts, no calendar platform — send a rule, get the dates.",
+    "contact": {
+      "name": "ChronoKit API"
+    },
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://chronokit-api.chronokit-api.workers.dev",
+      "description": "Production (Cloudflare Worker)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "RRULE",
+      "description": "RFC 5545 recurrence expansion."
+    },
+    {
+      "name": "Cron",
+      "description": "Cron parsing, description, and next-run computation."
+    },
+    {
+      "name": "Business Days",
+      "description": "Working-day arithmetic with custom weekend masks."
+    },
+    {
+      "name": "Meta",
+      "description": "Service metadata."
+    }
+  ],
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "service": {
+            "type": "string",
+            "example": "chronokit-api"
+          },
+          "version": {
+            "type": "string",
+            "example": "1.0.0"
+          },
+          "time": {
+            "type": "string",
+            "description": "Server time (UTC ISO 8601).",
+            "example": "2026-05-31T12:00:00.000Z"
+          }
+        },
+        "required": [
+          "status",
+          "service",
+          "version",
+          "time"
+        ]
+      },
+      "RRuleExpandResponse": {
+        "type": "object",
+        "properties": {
+          "occurrences": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "DST-correct occurrence datetimes as offset-aware ISO 8601 strings.",
+            "example": [
+              "2026-01-01T09:00:00.000-05:00",
+              "2026-01-02T09:00:00.000-05:00"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "example": 2
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True when more occurrences exist beyond the returned (capped) set.",
+            "example": false
+          },
+          "text": {
+            "type": "string",
+            "description": "Present when `includeText` was true.",
+            "example": "every day for 10 times"
+          }
+        },
+        "required": [
+          "occurrences",
+          "count",
+          "truncated"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "validation_error"
+              },
+              "message": {
+                "type": "string",
+                "example": "Request body failed validation."
+              },
+              "details": {}
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "RRuleExpandRequest": {
+        "type": "object",
+        "properties": {
+          "rrule": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "A single RFC 5545 RRULE. The \"RRULE:\" prefix is optional. Mutually exclusive with \"ruleSet\".",
+            "example": "FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=10"
+          },
+          "ruleSet": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "description": "A full VEVENT-style rule set: newline-joined RRULE / EXRULE / RDATE / EXDATE lines. Do NOT include a DTSTART line here — pass it via `dtstart`. Mutually exclusive with `rrule`.",
+            "example": "RRULE:FREQ=DAILY;COUNT=10\nEXDATE:20260103T090000"
+          },
+          "dtstart": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Recurrence anchor as local wall-clock time. Any offset is ignored; the zone comes from `tzid`.",
+            "example": "2026-01-01T09:00:00"
+          },
+          "tzid": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "IANA timezone identifier. Defaults to UTC when omitted.",
+            "example": "America/New_York"
+          },
+          "between": {
+            "$ref": "#/components/schemas/RRuleWindow"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "Number of occurrences to return from `dtstart` onward. Mutually exclusive with `between`. Clamped to the server's per-call result cap (`MAX_RESULTS`).",
+            "example": 10
+          },
+          "includeText": {
+            "type": "boolean",
+            "description": "Include a human-readable description of the rule.",
+            "example": true
+          }
+        },
+        "required": [
+          "dtstart"
+        ]
+      },
+      "RRuleWindow": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "ISO 8601 datetime (offset optional) or a bare calendar date.",
+            "example": "2026-01-01T00:00:00"
+          },
+          "end": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "ISO 8601 datetime (offset optional) or a bare calendar date.",
+            "example": "2026-12-31T23:59:59"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "description": "Inclusive wall-clock window. Occurrences within [start, end] are returned. Mutually exclusive with `count`."
+      },
+      "CronNextResponse": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "description": "Always true on success; invalid input returns a 400."
+          },
+          "description": {
+            "type": "string",
+            "description": "Present when `includeDescription` was true.",
+            "example": "At 09:00 AM, Monday through Friday"
+          },
+          "nextRuns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Upcoming run times as offset-aware ISO 8601 strings in `tzid`.",
+            "example": [
+              "2026-03-06T09:00:00.000-05:00",
+              "2026-03-09T09:00:00.000-04:00"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "example": 2
+          }
+        },
+        "required": [
+          "valid",
+          "nextRuns",
+          "count"
+        ]
+      },
+      "CronValidateResponse": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "error": {
+            "type": "string",
+            "example": "Invalid cron expression."
+          }
+        },
+        "required": [
+          "valid",
+          "error"
+        ]
+      },
+      "CronNextRequest": {
+        "type": "object",
+        "properties": {
+          "expression": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "A cron expression: standard 5-field, 6-field with seconds, or a macro (@daily, @weekly, @hourly, …).",
+            "example": "0 9 * * 1-5"
+          },
+          "tzid": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "IANA timezone identifier. Defaults to UTC when omitted.",
+            "example": "America/New_York"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 5,
+            "description": "Number of upcoming run times to return. Clamped to the server's per-call result cap (`MAX_RESULTS`).",
+            "example": 5
+          },
+          "includeDescription": {
+            "type": "boolean",
+            "description": "Include a plain-English description of the schedule.",
+            "example": true
+          }
+        },
+        "required": [
+          "expression"
+        ]
+      },
+      "BusinessDaysResponse": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "add",
+              "diff"
+            ]
+          },
+          "result": {
+            "type": "string",
+            "description": "Resulting date (mode \"add\"), YYYY-MM-DD.",
+            "example": "2026-03-13"
+          },
+          "workingDays": {
+            "type": "integer",
+            "description": "Working-day count (mode \"diff\"). Signed if end precedes start.",
+            "example": 10
+          },
+          "weekend": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7,
+              "description": "ISO weekday: 1=Mon … 7=Sun.",
+              "example": 6
+            },
+            "description": "Echo of the effective weekend mask.",
+            "example": [
+              6,
+              7
+            ]
+          }
+        },
+        "required": [
+          "mode",
+          "weekend"
+        ]
+      },
+      "BusinessDaysRequest": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Start calendar date.",
+            "example": "2026-03-06"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "add",
+              "diff"
+            ],
+            "description": "\"add\" → date N working days away; \"diff\" → count working days to `end`.",
+            "example": "add"
+          },
+          "days": {
+            "type": "integer",
+            "description": "Working-day offset for mode \"add\" (±N). Required when mode=\"add\".",
+            "example": 5
+          },
+          "end": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "End calendar date for mode \"diff\". Required when mode=\"diff\".",
+            "example": "2026-03-20"
+          },
+          "weekend": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7,
+              "description": "ISO weekday: 1=Mon … 7=Sun.",
+              "example": 6
+            },
+            "maxItems": 6,
+            "default": [
+              6,
+              7
+            ],
+            "description": "Weekend mask as ISO weekdays (1=Mon … 7=Sun). Default [6,7]=Sat+Sun. Gulf: [5,6]=Fri+Sat.",
+            "example": [
+              6,
+              7
+            ]
+          },
+          "holidays": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Calendar date, YYYY-MM-DD.",
+              "example": "2026-03-09"
+            },
+            "maxItems": 2000,
+            "default": [],
+            "description": "Caller-supplied holiday dates (YYYY-MM-DD) to exclude. The caller owns this data.",
+            "example": [
+              "2026-01-01",
+              "2026-12-25"
+            ]
+          }
+        },
+        "required": [
+          "start",
+          "mode"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Meta"
+        ],
+        "summary": "Liveness probe",
+        "description": "Returns service status and version. Unauthenticated and never enforced.",
+        "responses": {
+          "200": {
+            "description": "Service is healthy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/rrule/expand": {
+      "post": {
+        "tags": [
+          "RRULE"
+        ],
+        "summary": "Expand an RFC 5545 recurrence rule into DST-correct occurrences",
+        "description": "POST an RRULE (or a full rule set with EXDATE/RDATE), a DTSTART, an optional IANA timezone, and either a `between` window or a `count`. Returns the exact occurrence datetimes — DST-correct and timezone-aware — with an optional human-readable description.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RRuleExpandRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Occurrences computed successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RRuleExpandResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error, malformed rule, or an unbounded rule with no window/count.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cron/next": {
+      "post": {
+        "tags": [
+          "Cron"
+        ],
+        "summary": "Validate a cron expression and list its next run times",
+        "description": "POST a cron expression (5-field, 6-field with seconds, or a macro like @daily). Returns validity, an optional plain-English description, and the next N run times in the requested timezone. A syntactically invalid expression returns 200 with `{ valid: false, error }` so it doubles as a validator; structural request errors return 400.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CronNextRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Next runs computed, OR the expression was malformed (`valid:false`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CronNextResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CronValidateResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structural request error (bad body, bad types, or unknown timezone).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/business-days/calc": {
+      "post": {
+        "tags": [
+          "Business Days"
+        ],
+        "summary": "Add/subtract working days or count working days between two dates",
+        "description": "Mode \"add\": return the date N working days from `start` (±N). Mode \"diff\": count the working days between `start` and `end`. A working day is any day not in the weekend mask (ISO weekdays, default Sat+Sun) and not in the caller-supplied `holidays` list. No holiday data is bundled — the caller owns it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessDaysRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Computation succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessDaysResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (bad date, invalid weekend mask, missing mode field).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

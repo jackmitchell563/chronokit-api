@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build / bundler output
+dist/
+build/
+.wrangler/
+.turbo/
+
+# Test / coverage artifacts
+coverage/
+
+# Generated OpenAPI dump (regenerate with `pnpm openapi:dump openapi.json`)
+/openapi.json
+
+# Logs & OS cruft
+*.log
+.DS_Store
+
+# Secrets — NEVER commit. Mirror every var in .env.example with where to obtain it.
+.env
+.dev.vars
+.env.*
+!.env.example
+
+# Internal portfolio docs — keep OUT of the public repo (remove these lines to include them)
+SPEC.md
+AUDIT.md
+DEPLOY.md

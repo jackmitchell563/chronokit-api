@@ -1,0 +1,29 @@
+# Cloudflare Workers config for ChronoKit API.
+# Stateless, no bindings (no KV/D1/R2) — pure deterministic compute on the free tier.
+# Free tier: 100k requests/day, 10ms CPU/request, $0/mo. See DEPLOY.md.
+name = "chronokit-api"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+# nodejs_compat gives us a small set of Node built-ins; rrule/luxon/cron-parser are
+# pure-JS and Workers-safe, but the flag keeps `node:` shims available if a dep needs one.
+compatibility_flags = ["nodejs_compat"]
+
+# Observability: enable Workers logs (free tier includes a daily allotment).
+[observability]
+enabled = true
+
+# ---------------------------------------------------------------------------
+# Secrets are NOT defined here. Set them with `wrangler secret put <NAME>`.
+# See .env.example and DEPLOY.md. The only secret is RAPIDAPI_PROXY_SECRET,
+# used to verify that requests arrive through the RapidAPI gateway.
+# ---------------------------------------------------------------------------
+
+# Default (non-secret) vars. Override per-environment if desired.
+[vars]
+# When "true", the proxy-secret middleware is enforced (PRODUCTION default).
+# Local `wrangler dev` / `pnpm seed` override this to "false" via .dev.vars so the
+# demo runs without a secret. See DEPLOY.md.
+ENFORCE_RAPIDAPI_PROXY = "true"
+# Maximum results returned per call regardless of requested count (defensive clamp).
+# RapidAPI tiers map to this via the Worker; default mirrors the Free tier cap.
+MAX_RESULTS = "50"
