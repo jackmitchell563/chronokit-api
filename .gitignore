@@ -10,8 +10,9 @@ build/
 # Test / coverage artifacts
 coverage/
 
-# Generated OpenAPI dump (regenerate with `pnpm openapi:dump openapi.json`)
+# Generated OpenAPI dumps (regenerate with `pnpm openapi:dump …`)
 /openapi.json
+/openapi.rapidapi.json
 
 # Logs & OS cruft
 *.log
@@ -27,3 +28,4 @@ coverage/
 SPEC.md
 AUDIT.md
 DEPLOY.md
+LAUNCH.md
