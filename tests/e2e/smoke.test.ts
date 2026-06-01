@@ -42,10 +42,25 @@ async function postJson(
 }
 
 beforeAll(async () => {
-  child = spawn("npx", ["wrangler", "dev", "--ip", HOST, "--port", String(PORT), "--local"], {
-    stdio: ["ignore", "ignore", "inherit"],
-    env: { ...process.env },
-  })
+  // Boot with proxy enforcement OFF: this suite validates routing, bundling, the workerd
+  // runtime, and compute correctness — not the RapidAPI proxy gate (covered by its own
+  // unit/integration tests). Production stays enforce=true via wrangler.toml; CI has no
+  // .dev.vars, so we override explicitly here rather than depend on it.
+  child = spawn(
+    "npx",
+    [
+      "wrangler",
+      "dev",
+      "--ip",
+      HOST,
+      "--port",
+      String(PORT),
+      "--local",
+      "--var",
+      "ENFORCE_RAPIDAPI_PROXY:false",
+    ],
+    { stdio: ["ignore", "ignore", "inherit"], env: { ...process.env } },
+  )
   await waitForHealth(50_000)
 }, 60_000)
 

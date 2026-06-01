@@ -42,7 +42,20 @@ export async function withWrangler<T>(
 
   const child: ChildProcess = spawn(
     "npx",
-    ["wrangler", "dev", "--ip", host, "--port", String(port), "--local"],
+    // enforce=false: the demo/dump exercise compute, not the RapidAPI proxy gate.
+    // Overriding here keeps them working without the gitignored .dev.vars (prod stays
+    // enforce=true via wrangler.toml).
+    [
+      "wrangler",
+      "dev",
+      "--ip",
+      host,
+      "--port",
+      String(port),
+      "--local",
+      "--var",
+      "ENFORCE_RAPIDAPI_PROXY:false",
+    ],
     { stdio: ["ignore", "inherit", "inherit"], env: { ...process.env } },
   )
 

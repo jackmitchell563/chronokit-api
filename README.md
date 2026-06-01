@@ -4,7 +4,7 @@
 
 ChronoKit turns the famously painful "recurring events" problem into three simple, **stateless** HTTP calls. No OAuth, no calendar library to own, no RFC 5545 edge cases to learn.
 
-**▶ Available on RapidAPI:** _add your listing URL here once published_
+**▶ Available on RapidAPI:** https://rapidapi.com/johnevanmitchell/api/chronokit
 
 | Endpoint | What it does |
 | --- | --- |
